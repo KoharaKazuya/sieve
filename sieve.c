@@ -55,13 +55,28 @@ void str_replace(const char *origin, const char *target, const char *replaced, c
 
 int main(int argc, char **argv)
 {
+    int i;
     char buf[MAX_LINE_LENGTH];
     char condition[MAX_LINE_LENGTH];
 
-    // 引数が 1 つでなければ終了する
-    if (argc != 2) {
+    // 引数が 1 つ以上なければ終了する
+    if (argc <= 1) {
+        fprintf(stderr, "条件式を指定して下さい\n");
         return 1;
     }
+
+    // 引数を結合し、条件式を生成する
+    int condition_length = 0;
+    for (i=1; i<argc; i++) condition_length += strlen(argv[i]) + 1;
+    char condition_template[condition_length];
+    char *condition_template_cursor = condition_template;
+    for (i=1; i<argc; i++) {
+        strcpy(condition_template_cursor, argv[i]);
+        condition_template_cursor += strlen(argv[i]);
+        *condition_template_cursor = ' ';
+        condition_template_cursor++;
+    }
+    *condition_template_cursor = '\0';
 
     // 一行ずつ処理する
     while (fgets(buf, sizeof(buf), stdin) != NULL) {
@@ -69,7 +84,7 @@ int main(int argc, char **argv)
         char *line_end = strchr(buf, '\n');
         if (line_end != NULL) *line_end = '\0';
         // 第一引数の置換文字列を行で置換して判定式を生成する
-        str_replace(argv[1], replace_literal, buf, condition, MAX_LINE_LENGTH - 1);
+        str_replace(condition_template, replace_literal, buf, condition, MAX_LINE_LENGTH - 1);
 
         // 引数をシェルに渡して実行し、終了ステータスが
         // 0 なら 1 行を出力、0 以外なら出力しない
