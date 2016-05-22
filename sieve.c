@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <math.h>
 
 #define MAX_LINE_LENGTH 1048576
 
@@ -10,11 +11,12 @@
  */
 typedef struct {
     char *placeholder;
+    char *linenum_placeholder;
     char *condition;
 } command_option;
 
 const char default_placeholder[] = "{}";
-
+const char default_linenum_placeholder[] = "{linenum}";
 
 void str_replace(const char *origin, const char *target, const char *replaced, char *replaced_str, int replaced_str_length)
 {
@@ -68,13 +70,17 @@ void parse_option(int argc, char *argv[], command_option *option)
     int i;
 
     // option の初期化
-    option->placeholder = (char *) default_placeholder;
+    option->placeholder         = (char *) default_placeholder;
+    option->linenum_placeholder = (char *) default_linenum_placeholder;
 
     // コマンド引数のオプション部分をパース
-    while ((c = getopt(argc, argv, "p:")) != -1) {
+    while ((c = getopt(argc, argv, "p:l:")) != -1) {
         switch (c) {
         case 'p':  // placeholder: 条件式中の入力行で置き換える文字列の指定
             option->placeholder = optarg;
+            break;
+        case 'l':  // line number placeholder: 条件式中の行番号で置き換える文字列の指定
+            option->linenum_placeholder = optarg;
             break;
         default:
             exit(1);
@@ -100,23 +106,31 @@ void parse_option(int argc, char *argv[], command_option *option)
 int main(int argc, char *argv[])
 {
     char buf[MAX_LINE_LENGTH];
-    char condition[MAX_LINE_LENGTH];
+    char condition1[MAX_LINE_LENGTH];
+    char condition2[MAX_LINE_LENGTH];
+    unsigned int linenum;
+    // linenum の最大値から最大文字列長を求め、文字列長とする
+    linenum = -1;  // アンダーフローで最大値にする
+    char linenum_string[(int) floor(log10(linenum)) + 2];
 
     // コマンドのオプション、引数を処理する
     command_option option;
     parse_option(argc, argv, &option);
 
     // 一行ずつ処理する
+    linenum = 0;
     while (fgets(buf, sizeof(buf), stdin) != NULL) {
         // 改行文字を終端文字にして "1 行の文字列" として扱いやすくする
         char *line_end = strchr(buf, '\n');
         if (line_end != NULL) *line_end = '\0';
-        // 第一引数の置換文字列を行で置換して判定式を生成する
-        str_replace(option.condition, option.placeholder, buf, condition, MAX_LINE_LENGTH - 1);
+        // 置換文字列を行で置換して判定式を生成する
+        str_replace(option.condition, option.placeholder, buf, condition1, MAX_LINE_LENGTH - 1);
+        sprintf(linenum_string, "%u", linenum++);
+        str_replace(condition1, option.linenum_placeholder, linenum_string, condition2, MAX_LINE_LENGTH - 1);
 
         // 引数をシェルに渡して実行し、終了ステータスが
         // 0 なら 1 行を出力、0 以外なら出力しない
-        if (system(condition) == 0) {
+        if (system(condition2) == 0) {
           printf("%s\n", buf);
         }
     }
