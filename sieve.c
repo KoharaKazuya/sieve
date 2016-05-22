@@ -1,10 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define MAX_LINE_LENGTH 1048576
 
-const char replace_literal[] = "{}";
+/**
+ * このコマンドのオプション
+ */
+typedef struct {
+    char *placeholder;
+    char *condition;
+} command_option;
+
+const char default_placeholder[] = "{}";
 
 
 void str_replace(const char *origin, const char *target, const char *replaced, char *replaced_str, int replaced_str_length)
@@ -53,30 +62,49 @@ void str_replace(const char *origin, const char *target, const char *replaced, c
     strcpy(replaced_cursor, origin_cursor);
 }
 
-int main(int argc, char **argv)
+void parse_option(int argc, char *argv[], command_option *option)
 {
+    char c;
     int i;
-    char buf[MAX_LINE_LENGTH];
-    char condition[MAX_LINE_LENGTH];
 
-    // 引数が 1 つ以上なければ終了する
-    if (argc <= 1) {
-        fprintf(stderr, "条件式を指定して下さい\n");
-        return 1;
+    // option の初期化
+    option->placeholder = (char *) default_placeholder;
+
+    // コマンド引数のオプション部分をパース
+    while ((c = getopt(argc, argv, "p:")) != -1) {
+        switch (c) {
+        case 'p':  // placeholder: 条件式中の入力行で置き換える文字列の指定
+            option->placeholder = optarg;
+            break;
+        default:
+            exit(1);
+        }
     }
 
-    // 引数を結合し、条件式を生成する
+    // コマンド引数のオプション以外をパース
+    // (引数の残りを結合し、条件式を生成する)
     int condition_length = 0;
-    for (i=1; i<argc; i++) condition_length += strlen(argv[i]) + 1;
-    char condition_template[condition_length];
+    for (i=optind; i<argc; i++) condition_length += strlen(argv[i]) + 1;
+    char *condition_template = (char *) malloc(sizeof(char));
     char *condition_template_cursor = condition_template;
-    for (i=1; i<argc; i++) {
+    for (i=optind; i<argc; i++) {
         strcpy(condition_template_cursor, argv[i]);
         condition_template_cursor += strlen(argv[i]);
         *condition_template_cursor = ' ';
         condition_template_cursor++;
     }
     *condition_template_cursor = '\0';
+    option->condition = condition_template;
+}
+
+int main(int argc, char *argv[])
+{
+    char buf[MAX_LINE_LENGTH];
+    char condition[MAX_LINE_LENGTH];
+
+    // コマンドのオプション、引数を処理する
+    command_option option;
+    parse_option(argc, argv, &option);
 
     // 一行ずつ処理する
     while (fgets(buf, sizeof(buf), stdin) != NULL) {
@@ -84,7 +112,7 @@ int main(int argc, char **argv)
         char *line_end = strchr(buf, '\n');
         if (line_end != NULL) *line_end = '\0';
         // 第一引数の置換文字列を行で置換して判定式を生成する
-        str_replace(condition_template, replace_literal, buf, condition, MAX_LINE_LENGTH - 1);
+        str_replace(option.condition, option.placeholder, buf, condition, MAX_LINE_LENGTH - 1);
 
         // 引数をシェルに渡して実行し、終了ステータスが
         // 0 なら 1 行を出力、0 以外なら出力しない
