@@ -18,9 +18,17 @@ typedef struct {
 const char default_placeholder[] = "{}";
 const char default_linenum_placeholder[] = "{linenum}";
 
-void str_replace(const char *origin, const char *target, const char *replaced, char *replaced_str, int replaced_str_length)
+/**
+ * <origin> 文字列中の <target> 部分文字列を <replaced> 文字列で置き換える
+ *
+ * @param[in,out] origin 全体文字列
+ * @param[in] replaced_str_length 全体文字列の最大長
+ * @param[in] target 置換対象部分文字列
+ * @param[in] replaced 置換後部分文字列
+ */
+void str_replace(char *origin, int replaced_str_length, const char *target, const char *replaced)
 {
-    int target_length = strlen(target);
+    int target_length   = strlen(target);
     int replaced_length = strlen(replaced);
 
     // 置換対象文字列の長さが 0 のときはエラー
@@ -49,19 +57,21 @@ void str_replace(const char *origin, const char *target, const char *replaced, c
     }
 
     // 置換しつつ戻り値を生成
-    const char *origin_cursor = origin;
-    const char *next_cursor = origin;
-    char *replaced_cursor = replaced_str;
-    while ((next_cursor = strstr(origin_cursor, target)) != NULL) {
-        int unmatch_length = strlen(origin_cursor) - strlen(next_cursor);
-        memcpy(replaced_cursor, origin_cursor, unmatch_length);
-        origin_cursor   += unmatch_length;
+    const char original_str[replaced_str_length + 1];
+    strcpy((char *) original_str, origin);
+    char *prev_cursor     = (char *) original_str;
+    char *matched_cursor  = (char *) original_str;
+    char *replaced_cursor = origin;
+    while ((matched_cursor = strstr(prev_cursor, target)) != NULL) {
+        int unmatch_length = strlen(prev_cursor) - strlen(matched_cursor);
+        memcpy(replaced_cursor, prev_cursor, unmatch_length);
+        prev_cursor     += unmatch_length;
         replaced_cursor += unmatch_length;
         strcpy(replaced_cursor, replaced);
-        origin_cursor   += target_length;
+        prev_cursor     += target_length;
         replaced_cursor += replaced_length;
     }
-    strcpy(replaced_cursor, origin_cursor);
+    strcpy(replaced_cursor, prev_cursor);
 }
 
 void parse_option(int argc, char *argv[], command_option *option)
@@ -106,8 +116,7 @@ void parse_option(int argc, char *argv[], command_option *option)
 int main(int argc, char *argv[])
 {
     char buf[MAX_LINE_LENGTH];
-    char condition1[MAX_LINE_LENGTH];
-    char condition2[MAX_LINE_LENGTH];
+    char condition[MAX_LINE_LENGTH];
     unsigned int linenum;
     // linenum の最大値から最大文字列長を求め、文字列長とする
     linenum = -1;  // アンダーフローで最大値にする
@@ -124,13 +133,14 @@ int main(int argc, char *argv[])
         char *line_end = strchr(buf, '\n');
         if (line_end != NULL) *line_end = '\0';
         // 置換文字列を行で置換して判定式を生成する
-        str_replace(option.condition, option.placeholder, buf, condition1, MAX_LINE_LENGTH - 1);
+        strcpy(condition, option.condition);
         sprintf(linenum_string, "%u", linenum++);
-        str_replace(condition1, option.linenum_placeholder, linenum_string, condition2, MAX_LINE_LENGTH - 1);
+        str_replace(condition, MAX_LINE_LENGTH - 1, option.placeholder, buf);
+        str_replace(condition, MAX_LINE_LENGTH - 1, option.linenum_placeholder, linenum_string);
 
         // 引数をシェルに渡して実行し、終了ステータスが
         // 0 なら 1 行を出力、0 以外なら出力しない
-        if (system(condition2) == 0) {
+        if (system(condition) == 0) {
           printf("%s\n", buf);
         }
     }
